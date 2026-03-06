@@ -85,7 +85,10 @@ app.get('/api/emails/search', async (req, res) => {
     if (!keyword) return res.status(400).json({ error: "Keyword required" });
 
     // --- 1. CHECK CACHE FIRST ---
-    const cachedEmails = await Email.find({ keyword: keyword });
+    // Sort by newest date (-1) and limit to 5 emails to match the Google API setting
+    const cachedEmails = await Email.find({ keyword: keyword })
+      .sort({ date: -1 })
+      .limit(5);
     let cacheReturned = false;
     if (cachedEmails.length > 0) {
       console.log(`🚀 Found ${keyword} in MongoDB Cache! Returning immediately.`);
@@ -147,7 +150,7 @@ app.get('/api/emails/search', async (req, res) => {
     oauth2Client.setCredentials(credentialsToSet);
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-    const response = await gmail.users.messages.list({ userId: 'me', q: keyword, maxResults: 10 });
+    const response = await gmail.users.messages.list({ userId: 'me', q: keyword, maxResults: 5 });
     const messages = response.data.messages || [];
 
     const emailDetails = await Promise.all(
