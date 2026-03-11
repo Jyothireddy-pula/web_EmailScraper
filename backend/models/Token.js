@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const tokenSchema = new mongoose.Schema({
-    user: {type: String, default: 'rwc.iraaditi@gmail.com'},
+    user: {type: String, required: true},
     access_token: {type: String, required:true },
     refresh_token: {type: String },
     scope: { type: String },

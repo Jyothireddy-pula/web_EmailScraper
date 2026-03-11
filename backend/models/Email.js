@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const emailSchema = new mongoose.Schema({
-  userId: { type: String, default: 'rwc.iraaditi@gmail.com' },
+  userId: { type: String, required: true },
   keyword: { type: String, required: true, index: true }, // Indexing makes searching fast
   gmailId: { type: String, unique: true }, // Prevents saving the same email twice
   subject: String,

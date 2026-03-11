@@ -1,80 +1,105 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 function App() {
   const [query, setQuery] = useState('');
   const [emails, setEmails] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [userEmail, setUserEmail] = useState(localStorage.getItem('userEmail') || '');
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const email = params.get('email');
+    if (email) {
+      setUserEmail(email);
+      localStorage.setItem('userEmail', email);
+      window.history.replaceState({}, document.title, '/');
+    }
+  }, []);
 
   const handleSearch = async (e) => {
     e.preventDefault();
+    
+    if (!userEmail) {
+       alert("Please click 'Connect' to log in with Google first!");
+       return;
+    }
+
     setLoading(true);
     try {
-      // Calling your Express backend route
-      const response = await fetch(`http://localhost:5000/api/emails/search?q=${query}`);
+      const response = await fetch(`http://localhost:5000/api/emails/search?q=${query}&email=${encodeURIComponent(userEmail)}`);
       const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || "Search failed");
+      }
+      
       setEmails(data);
     } catch (error) {
       console.error("Search failed:", error);
+      alert(error.message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-pink-300 bg-polka-dots text-white p-8">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-5xl font-bold mb-1 text-[#FFF58A] text-center font-arcade ">Email Scrapper</h1>
-        <p className="text-xl font-medium font-arcade mb-8 text-center text-cyber-pink ">Scrape &nbsp; Emails &nbsp; like &nbsp; a &nbsp; pro!</p>
+    <div className="min-h-screen text-gray-900 p-4 md:p-8">
+      
+      <div className="absolute top-4 right-4 md:top-8 md:right-8 z-10 w-auto">
         <button 
-  onClick={() => window.location.href = 'http://localhost:5000/auth/google'}
-  className="absolute right-8 top-8 mb-4 bg-neon-mint text-gray-200 px-4 py-2 rounded-md font-arcade flex text-xl items-center gap-2 border-2 border-white hover:bg-deep-teal transition"
->
-  <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5" alt="G" />
-  Connect
-</button>
-        <hr className="h-[5px] w-full bg-deep-teal my-6"></hr>
+          onClick={() => window.location.href = 'http://localhost:5000/auth/google'}
+          className="bg-neon-mint hover:bg-deep-teal hover:text-white text-deep-teal p-3 md:px-6 md:py-3 font-arcade flex text-xl font-bold items-center gap-3 border-4 border-deep-teal transition-colors uppercase tracking-widest cursor-pointer"
+        >
+          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-8 h-8 md:w-6 md:h-6 bg-white rounded-full p-0.5 border-2 border-deep-teal" alt="G" />
+          <span className="hidden md:block">Connect</span>
+        </button>
+      </div>
+
+      <div className="max-w-4xl mx-auto pt-20 md:pt-8">
+        <h1 className="text-5xl md:text-6xl font-bold mb-3 text-deep-teal text-center font-arcade tracking-widest drop-shadow-sm uppercase leading-tight">Email Scrapper</h1>
+        <p className="text-lg md:text-2xl font-bold font-arcade mb-8 px-4 text-center text-cyber-pink tracking-widest leading-loose">Scrape Emails like a pro!</p>
+
+        <hr className="border-t-4 border-dashed border-deep-teal/40 my-8"></hr>
         
-        {/* Search Bar */}
-        <form onSubmit={handleSearch} className="flex gap-4 mb-10">
+        <form onSubmit={handleSearch} className="flex gap-4 mb-10 h-14">
           <input 
             type="text" 
-            placeholder="Enter &nbsp; Keyword"
-            className="flex-1 p-2 rounded-sm bg-gray-200 border-2 border-deep-teal focus:outline-none focus:border-neon-mint text-cyber-pink/70 font-bold font-arcade text-2xl"
+            placeholder="Enter Keyword..."
+            className="flex-1 px-4 bg-gray-100 border-4 border-deep-teal focus:outline-none focus:bg-white focus:border-neon-mint text-cyber-pink font-bold font-arcade text-2xl uppercase placeholder:text-deep-teal/50"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
           <button 
             type="submit" 
-            className="bg-[#FFF58A] hover:bg-yellow-300 px-6 py-3 rounded font-semibold transition text-deep-teal font-arcade"
+            className="bg-[#FFF58A] hover:bg-[#ffe500] px-8 text-deep-teal font-arcade text-2xl font-bold border-4 border-deep-teal transition-colors uppercase tracking-widest cursor-pointer"
           >
             {loading ? 'Searching...' : 'Search'}
           </button>
         </form>
 
-        {/* Results Table */}
-        <div className="bg-pink-200 rounded-md overflow-hidden border border-deep-teal/70">
-          <table className="w-full text-left">
-            <thead className="bg-cyber-pink text-deep-teal font-arcade text-xl uppercase text-sm">
+        <div className="bg-white border-4 border-deep-teal overflow-hidden">
+          <table className="w-full text-left border-collapse table-fixed">
+            <thead className="bg-cyber-pink text-white font-arcade text-2xl uppercase tracking-widest border-b-4 border-deep-teal">
               <tr>
-                <th className="p-4">Sender</th>
-                <th className="p-4">Subject</th>
-                <th className="p-4">Date</th>
+                <th className="p-4 border-r-4 border-deep-teal w-1/4">Sender</th>
+                <th className="p-4 border-r-4 border-deep-teal w-1/2">Subject</th>
+                <th className="p-4 w-1/4 truncate">Date</th>
               </tr>
             </thead>
             <tbody>
               {emails.length > 0 ? emails.map((email) => (
-                <tr key={email.id} className="border-t border-deep-teal/70 hover:bg-gray-750 transition">
-                  <td className="p-4 text-sm font-medium text-pink-500">{email.from}</td>
-                  <td className="p-4 text-sm">
-                    <div className="font-semibold text-deep-teal ">{email.subject}</div>
-                    <div className="text-gray-400 text-xs truncate w-64">{email.snippet}</div>
+                <tr key={email.id} className="border-b-4 border-deep-teal last:border-0 hover:bg-pink-50 transition-colors">
+                  <td className="p-4 font-bold text-deep-teal border-r-4 border-deep-teal whitespace-pre-wrap break-all">{email.from}</td>
+                  <td className="p-4 border-r-4 border-deep-teal overflow-hidden">
+                    <div className="font-black text-xl text-deep-teal mb-1 truncate">{email.subject}</div>
+                    <div className="text-gray-600 font-medium text-sm truncate">{email.snippet}</div>
                   </td>
-                  <td className="p-4 text-xs text-pink-500 ">{new Date(email.date).toLocaleDateString()}</td>
+                  <td className="p-4 font-black text-cyber-pink truncate">{new Date(email.date).toLocaleDateString()}</td>
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan="3" className="p-10 text-center text-gray-500">
-                    No emails found. Try searching for a keyword above.
+                  <td colSpan="3" className="p-16 text-center text-deep-teal font-arcade text-2xl uppercase tracking-wider bg-gray-50">
+                    {query && !loading ? "No emails found for that keyword." : "NO EMAILS FOUND... SEARCH A NEW KEYWORD!"}
                   </td>
                 </tr>
               )}
