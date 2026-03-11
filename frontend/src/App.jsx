@@ -26,7 +26,8 @@ function App() {
 
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:5000/api/emails/search?q=${query}&email=${encodeURIComponent(userEmail)}`);
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      const response = await fetch(`${apiUrl}/api/emails/search?q=${query}&email=${encodeURIComponent(userEmail)}`);
       const data = await response.json();
       
       if (!response.ok) {
@@ -47,7 +48,7 @@ function App() {
       
       <div className="absolute top-4 right-4 md:top-8 md:right-8 z-10 w-auto">
         <button 
-          onClick={() => window.location.href = 'http://localhost:5000/auth/google'}
+          onClick={() => window.location.href = `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/auth/google`}
           className="bg-neon-mint hover:bg-deep-teal hover:text-white text-deep-teal p-3 md:px-6 md:py-3 font-arcade flex text-xl font-bold items-center gap-3 border-4 border-deep-teal transition-colors uppercase tracking-widest cursor-pointer"
         >
           <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-8 h-8 md:w-6 md:h-6 bg-white rounded-full p-0.5 border-2 border-deep-teal" alt="G" />
