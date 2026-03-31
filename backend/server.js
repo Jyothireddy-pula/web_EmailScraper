@@ -146,7 +146,11 @@ app.get('/api/emails/search', async (req, res) => {
     oauth2Client.setCredentials(credentialsToSet);
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-    const response = await gmail.users.messages.list({ userId: 'me', q: keyword, maxResults: 5 });
+    const response = await gmail.users.messages.list({
+      userId: 'me',
+      q: keyword,
+      maxResults: 50
+    });
     const messages = response.data.messages || [];
 
     const emailDetails = await Promise.all(
@@ -184,6 +188,23 @@ app.get('/api/emails/search', async (req, res) => {
   } catch (error) {
     console.error('Error:', error);
     if (!res.headersSent) {
+      const rawMessage =
+        error?.message ||
+        error?.response?.data?.error?.message ||
+        '';
+
+      if (/Gmail API has not been used/i.test(rawMessage)) {
+        return res.status(500).json({
+          error: 'Gmail API is not enabled in your Google Cloud project. Enable Gmail API and try again.'
+        });
+      }
+
+      if (/insufficient authentication scopes/i.test(rawMessage)) {
+        return res.status(401).json({
+          error: 'Missing Gmail permission. Reconnect Google and allow Gmail read access.'
+        });
+      }
+
       res.status(500).json({ error: 'Search failed' });
     }
   }
