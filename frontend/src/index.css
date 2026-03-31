@@ -7,7 +7,7 @@
   font-style: normal;
 }
 
-@theme {
+:root {
   --color-cyber-pink: #FF3E9B;
   --color-soft-pink: #FF88BA;
   --color-deep-teal: #3A8B95;
