@@ -1,16 +1,59 @@
-# React + Vite
+# AI Email Scraper
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## 🚀 Features
+- **📧 Smart Email Search**: Search your Gmail with natural language
+- **🤖 AI-Powered Summaries**: Get intelligent email analysis with Gemini/ChatGPT
+- **📝 Humanized Auto-Replies**: Generate professional responses automatically
+- **🌍 Multi-Language Support**: English, Hindi, Telugu
+- **🎯 Smart Categorization**: Academic, Placement, Announcements, Others
+- **📊 Dashboard Analytics**: Track important emails and deadlines
 
-Currently, two official plugins are available:
+## 🔧 How to Use
+1. **Connect Gmail**: Click "Connect your Gmail" button
+2. **Search Emails**: Type keywords or use natural language
+3. **Generate Summary**: Click 📝 on any email for AI summary
+4. **Create Reply**: Click 🤖 to generate intelligent replies
+5. **Send Response**: Send directly from your Gmail account
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## 🛠️ Technical Stack
+- **Frontend**: React with Tailwind CSS
+- **Backend**: Node.js with Express
+- **Database**: MongoDB for email caching
+- **AI Services**: Google Gemini & OpenAI ChatGPT
+- **Authentication**: Google OAuth2
 
-## React Compiler
+## 🌐 Live Demo
+Coming soon! Deploy your own instance using the instructions below.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 📦 Installation
+```bash
+# Clone the repository
+git clone https://github.com/Jyothireddy-pula/web_EmailScraper.git
+cd web_EmailScraper
 
-## Expanding the ESLint configuration
+# Install dependencies
+cd frontend && npm install
+cd ../backend && npm install
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+# Set up environment variables
+# Create .env file in backend with your credentials
+
+# Start the application
+npm run dev
+```
+
+## 🔐 Privacy & Security
+- **No Email Storage**: Emails are not stored on our servers
+- **Secure OAuth**: Uses Google's secure authentication
+- **Local Processing**: AI processing happens in your browser
+- **API Key Protection**: Your AI API keys are stored locally
+
+## 📄 Legal
+- [Privacy Policy](./PRIVACY_POLICY.md)
+- [Terms of Service](./TERMS_OF_SERVICE.md)
+
+## 🤝 Contributing
+Open source project. Contributions welcome!
+
+## 📧 Contact
+For support: jyothi.23bce7882@vitapstudent.ac.in
