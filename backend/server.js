@@ -210,6 +210,114 @@ app.get('/api/emails/search', async (req, res) => {
   }
 });
 
+// Send reply endpoint with AI support
+app.post('/api/emails/send-reply', async (req, res) => {
+  try {
+    const { to, subject, message, userEmail, aiService, apiKey } = req.body;
+    
+    if (!to || !subject || !message || !userEmail) {
+      return res.status(400).json({ error: 'Missing required fields: to, subject, message, userEmail' });
+    }
+    
+    let finalReply = message;
+    
+    // If AI service is selected, use AI to enhance the reply
+    if (aiService && apiKey && message.toLowerCase().includes('use ai')) {
+      try {
+        let aiEnhancedReply = '';
+        
+        if (aiService === 'gemini') {
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              contents: [{
+                parts: [{
+                  text: `Enhance this reply to be more professional and comprehensive. Original reply: "${message}". Add more details, improve formatting, and make it more impressive.`
+                }]
+              }]
+            })
+          });
+          
+          const data = await response.json();
+          if (data.candidates && data.candidates[0]) {
+            aiEnhancedReply = data.candidates[0].content.parts[0].text;
+          }
+        } else if (aiService === 'chatgpt') {
+          const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: 'gpt-3.5-turbo',
+              messages: [
+                {
+                  role: 'system',
+                  content: 'You are an expert email assistant. Enhance the given reply to be more professional, comprehensive, and impressive.'
+                },
+                {
+                  role: 'user',
+                  content: `Enhance this reply to be more professional and comprehensive. Original reply: "${message}". Add more details, improve formatting, and make it more impressive.`
+                }
+              ],
+              max_tokens: 300
+            })
+          });
+          
+          const data = await response.json();
+          if (data.choices && data.choices[0]) {
+            aiEnhancedReply = data.choices[0].message.content;
+          }
+        }
+        
+        finalReply = aiEnhancedReply || message;
+      } catch (error) {
+        console.error('Error enhancing reply:', error);
+      }
+    }
+    
+    // Get user's token for sending
+    const tokenDoc = await Token.findOne({ user: userEmail });
+    if (!tokenDoc) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+    
+    // Set up OAuth2 client for sending
+    oauth2Client.setCredentials({
+      access_token: tokenDoc.access_token,
+      refresh_token: tokenDoc.refresh_token
+    });
+    
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+    
+    // Send the reply
+    const emailMessage = [
+      `To: ${to}`,
+      `Subject: ${subject}`,
+      '',
+      message
+    ].join('\n');
+    
+    await gmail.users.messages.send({
+      userId: 'me',
+      requestBody: {
+        raw: Buffer.from(emailMessage).toString('base64')
+      }
+    });
+    
+    console.log(`Reply sent to ${to} from user ${userEmail}`);
+    res.json({ success: true, message: 'Reply sent successfully' });
+    
+  } catch (error) {
+    console.error('Error sending reply:', error);
+    res.status(500).json({ error: 'Failed to send reply', details: error.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });

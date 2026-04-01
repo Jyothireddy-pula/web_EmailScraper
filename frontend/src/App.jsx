@@ -356,6 +356,11 @@ function App() {
 
   // Generate email summary using AI
   const generateEmailSummary = async (email) => {
+    if (!email) {
+      setEmailSummary('No email selected');
+      return 'No email selected';
+    }
+    
     setIsAiLoading(true);
     
     try {
@@ -365,59 +370,82 @@ function App() {
       
       let summary = '';
       
-      if (aiService === 'gemini' && apiKey) {
-        // Use Gemini API
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            contents: [{
-              parts: [{
-                text: `Please analyze this email and provide a comprehensive summary. Extract the main points, key information, and any action items. Make it clear and professional.\n\nEmail:\n${fullText}`
+      // Use rule-based fallback if no API key
+      if (!apiKey) {
+        summary = generateRuleBasedSummary(subject, snippet);
+        setEmailSummary(summary);
+        return summary;
+      }
+      
+      if (aiService === 'gemini') {
+        try {
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              contents: [{
+                parts: [{
+                  text: `Please analyze this email and provide a comprehensive summary. Extract the main points, key information, and any action items. Make it clear and professional.\n\nEmail:\n${fullText}`
+                }]
               }]
-            }]
-          })
-        });
-        
-        const data = await response.json();
-        if (data.candidates && data.candidates[0]) {
-          summary = data.candidates[0].content.parts[0].text;
+            })
+          });
+          
+          if (!response.ok) {
+            throw new Error(`Gemini API error: ${response.status}`);
+          }
+          
+          const data = await response.json();
+          if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0]) {
+            summary = data.candidates[0].content.parts[0].text;
+          }
+        } catch (geminiError) {
+          console.error('Gemini API error:', geminiError);
+          summary = generateRuleBasedSummary(subject, snippet);
         }
-      } else if (aiService === 'chatgpt' && apiKey) {
-        // Use ChatGPT API
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'gpt-3.5-turbo',
-            messages: [
-              {
-                role: 'system',
-                content: 'You are an expert email analyst. Provide clear, professional summaries with main points and key information.'
-              },
-              {
-                role: 'user',
-                content: `Please analyze this email and provide a comprehensive summary. Extract the main points, key information, and any action items.\n\nEmail:\n${fullText}`
-              }
-            ],
-            max_tokens: 500
-          })
-        });
-        
-        const data = await response.json();
-        if (data.choices && data.choices[0]) {
-          summary = data.choices[0].message.content;
+      } else if (aiService === 'chatgpt') {
+        try {
+          const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: 'gpt-3.5-turbo',
+              messages: [
+                {
+                  role: 'system',
+                  content: 'You are an expert email analyst. Provide clear, professional summaries with main points and key information.'
+                },
+                {
+                  role: 'user',
+                  content: `Please analyze this email and provide a comprehensive summary. Extract the main points, key information, and any action items.\n\nEmail:\n${fullText}`
+                }
+              ],
+              max_tokens: 500
+            })
+          });
+          
+          if (!response.ok) {
+            throw new Error(`ChatGPT API error: ${response.status}`);
+          }
+          
+          const data = await response.json();
+          if (data.choices && data.choices[0] && data.choices[0].message) {
+            summary = data.choices[0].message.content;
+          }
+        } catch (chatgptError) {
+          console.error('ChatGPT API error:', chatgptError);
+          summary = generateRuleBasedSummary(subject, snippet);
         }
       }
       
+      // Fallback if no summary generated
       if (!summary) {
-        // Fallback to rule-based summary
-        summary = `Email regarding: ${subject}. ${snippet.substring(0, 100)}${snippet.length > 100 ? '...' : ''}`;
+        summary = generateRuleBasedSummary(subject, snippet);
       }
       
       setEmailSummary(summary);
@@ -425,14 +453,45 @@ function App() {
       
     } catch (error) {
       console.error('Error generating summary:', error);
-      setEmailSummary('Failed to generate summary. Please try again.');
+      const fallbackSummary = generateRuleBasedSummary(email.subject || '', email.snippet || '');
+      setEmailSummary(fallbackSummary);
+      return fallbackSummary;
     } finally {
       setIsAiLoading(false);
     }
   };
 
+  // Rule-based summary fallback
+  const generateRuleBasedSummary = (subject, snippet) => {
+    const text = `${subject} ${snippet}`.toLowerCase();
+    
+    if (text.includes('deadline') || text.includes('due by') || text.includes('submit before')) {
+      return `⚠️ DEADLINE ALERT: This email contains deadline information.\n\n📋 Subject: ${subject}\n\n🔑 Key Points: ${snippet.substring(0, 150)}${snippet.length > 150 ? '...' : ''}\n\n🎯 Action Required: Review deadline dates and complete tasks on time.`;
+    }
+    
+    if (text.includes('assignment') || text.includes('homework') || text.includes('project')) {
+      return `📚 ASSIGNMENT: This email contains assignment details.\n\n📋 Subject: ${subject}\n\n🔑 Key Points: ${snippet.substring(0, 150)}${snippet.length > 150 ? '...' : ''}\n\n🎯 Action Required: Review instructions and submission requirements.`;
+    }
+    
+    if (text.includes('meeting') || text.includes('schedule') || text.includes('appointment')) {
+      return `📅 MEETING: This email is about a meeting or schedule.\n\n📋 Subject: ${subject}\n\n🔑 Key Points: ${snippet.substring(0, 150)}${snippet.length > 150 ? '...' : ''}\n\n🎯 Action Required: Check your calendar for the date/time and prepare accordingly.`;
+    }
+    
+    if (text.includes('test') || text.includes('exam') || text.includes('quiz')) {
+      return `📝 TEST/EXAM: This email contains test information.\n\n📋 Subject: ${subject}\n\n🔑 Key Points: ${snippet.substring(0, 150)}${snippet.length > 150 ? '...' : ''}\n\n🎯 Action Required: Review test details and prepare accordingly.`;
+    }
+    
+    // Default summary
+    return `📧 EMAIL SUMMARY\n\n📋 Subject: ${subject}\n\n🔑 Key Points: ${snippet.substring(0, 150)}${snippet.length > 150 ? '...' : ''}\n\n🎯 Action Required: Review the email content and respond as needed.`;
+  };
+
   // Generate auto-reply using AI
   const generateAutoReply = async (email) => {
+    if (!email) {
+      setAutoReply('No email selected');
+      return 'No email selected';
+    }
+    
     setIsAiLoading(true);
     
     try {
@@ -442,143 +501,212 @@ function App() {
       
       let reply = '';
       
-      if (aiService === 'gemini' && apiKey) {
-        // Use Gemini API for humanized replies
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            contents: [{
-              parts: [{
-                text: `Generate a professional, humanized reply to this email. Consider the context: ${replyTone} tone, ${replyLanguage} language.\n\nOriginal Email:\n${fullText}\n\nRequirements:\n1. Be professional and courteous\n2. Address the main points directly\n3. Keep it concise but complete\n4. Use natural language\n5. Sign off appropriately`
+      // Use rule-based fallback if no API key
+      if (!apiKey) {
+        reply = generateRuleBasedReply(fullText);
+        setAutoReply(reply);
+        return reply;
+      }
+      
+      if (aiService === 'gemini') {
+        try {
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              contents: [{
+                parts: [{
+                  text: `Generate a professional, humanized reply to this email. Consider the context: ${replyTone} tone, ${replyLanguage} language.\n\nOriginal Email:\n${fullText}\n\nRequirements:\n1. Be professional and courteous\n2. Address the main points directly\n3. Keep it concise but complete\n4. Use natural language\n5. Sign off appropriately`
+                }]
               }]
-            }]
-          })
-        });
-        
-        const data = await response.json();
-        if (data.candidates && data.candidates[0]) {
-          reply = data.candidates[0].content.parts[0].text;
+            })
+          });
+          
+          if (!response.ok) {
+            throw new Error(`Gemini API error: ${response.status}`);
+          }
+          
+          const data = await response.json();
+          if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0]) {
+            reply = data.candidates[0].content.parts[0].text;
+          }
+        } catch (geminiError) {
+          console.error('Gemini API error:', geminiError);
+          reply = generateRuleBasedReply(fullText);
         }
-      } else if (aiService === 'chatgpt' && apiKey) {
-        // Use ChatGPT API for humanized replies
-        const toneInstructions = {
-          professional: 'Generate a professional, formal reply',
-          friendly: 'Generate a friendly, casual reply',
-          casual: 'Generate a very casual, informal reply'
-        };
-        
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'gpt-3.5-turbo',
-            messages: [
-              {
-                role: 'system',
-                content: `You are an expert email assistant. Generate ${toneInstructions[replyTone]} in ${replyLanguage} language. The reply should be humanized, professional, and address the email content directly.`
-              },
-              {
-                role: 'user',
-                content: `Generate a ${toneInstructions[replyTone]} in ${replyLanguage} language for this email.\n\nOriginal Email:\n${fullText}\n\nRequirements:\n1. Be professional and courteous\n2. Address the main points directly\n3. Keep it concise but complete\n4. Use natural language\n5. Sign off appropriately`
-              }
-            ],
-            max_tokens: 300
-          })
-        });
-        
-        const data = await response.json();
-        if (data.choices && data.choices[0]) {
-          reply = data.choices[0].message.content;
+      } else if (aiService === 'chatgpt') {
+        try {
+          const toneInstructions = {
+            professional: 'Generate a professional, formal reply',
+            friendly: 'Generate a friendly, casual reply',
+            casual: 'Generate a very casual, informal reply'
+          };
+          
+          const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: 'gpt-3.5-turbo',
+              messages: [
+                {
+                  role: 'system',
+                  content: `You are an expert email assistant. Generate ${toneInstructions[replyTone]} in ${replyLanguage} language. The reply should be humanized, professional, and address the email content directly.`
+                },
+                {
+                  role: 'user',
+                  content: `Generate a ${toneInstructions[replyTone]} in ${replyLanguage} language for this email.\n\nOriginal Email:\n${fullText}\n\nRequirements:\n1. Be professional and courteous\n2. Address the main points directly\n3. Keep it concise but complete\n4. Use natural language\n5. Sign off appropriately`
+                }
+              ],
+              max_tokens: 300
+            })
+          });
+          
+          if (!response.ok) {
+            throw new Error(`ChatGPT API error: ${response.status}`);
+          }
+          
+          const data = await response.json();
+          if (data.choices && data.choices[0] && data.choices[0].message) {
+            reply = data.choices[0].message.content;
+          }
+        } catch (chatgptError) {
+          console.error('ChatGPT API error:', chatgptError);
+          reply = generateRuleBasedReply(fullText);
         }
       }
       
+      // Fallback if no reply generated
       if (!reply) {
-        // Fallback to rule-based reply
-        if (fullText.includes('deadline') || fullText.includes('submit before')) {
-          reply = replyTone === 'professional' 
-            ? 'Thank you for the reminder. I acknowledge the deadline and will ensure timely completion of the required tasks.'
-            : replyTone === 'friendly'
-            ? 'Thanks for letting me know about the deadline! I\'ll make sure to get it done on time.'
-            : 'Got it, will finish before the deadline.';
-        } else if (fullText.includes('assignment') || fullText.includes('homework')) {
-          reply = replyTone === 'professional' 
-            ? 'Thank you for the assignment details. I have received the instructions and will begin working on it promptly.'
-            : replyTone === 'friendly'
-            ? 'Thanks for the assignment! I\'ll get started on it right away.'
-            : 'Assignment received, will start work.';
-        } else if (fullText.includes('meeting') || fullText.includes('schedule')) {
-          reply = replyTone === 'professional' 
-            ? 'Thank you for the meeting invitation. I have noted the schedule and will attend as planned.'
-            : replyTone === 'friendly'
-            ? 'Thanks for the invite! Looking forward to the meeting.'
-            : 'Meeting noted, will attend.';
-        } else if (fullText.includes('test') || fullText.includes('exam')) {
-          reply = replyTone === 'professional' 
-            ? 'Thank you for the test information. I have noted the details and will prepare accordingly.'
-            : replyTone === 'friendly'
-            ? 'Got it, thanks for the test info! I\'ll study and be ready.'
-            : 'Test details received, will prepare.';
-        } else {
-          reply = replyTone === 'professional' 
-            ? 'Thank you for your email. I have received the information and will respond as needed.'
-            : replyTone === 'friendly'
-            ? 'Thanks for the message! I\'ll get back to you if needed.'
-            : 'Got it, thanks.';
-        }
+        reply = generateRuleBasedReply(fullText);
       }
       
       // Apply language translation if needed
-      if (replyLanguage === 'hindi') {
-        const translations = {
-          'Thank you': 'धन्यवाद',
-          'deadline': 'डेडलाइन',
-          'assignment': 'असाइनमेंट',
-          'meeting': 'मीटिंग',
-          'test': 'टेस्ट'
-        };
-        
-        Object.keys(translations).forEach(eng => {
-          reply = reply.replace(new RegExp(eng, 'gi'), translations[eng]);
-        });
-      } else if (replyLanguage === 'telugu') {
-        const translations = {
-          'Thank you': 'ధనన్యవాద',
-          'deadline': 'డెడ్‌లైన్',
-          'assignment': 'అస్సైన్‌మెంట్',
-          'meeting': 'సమీటింగ్',
-          'test': 'పరీక్ష'
-        };
-        
-        Object.keys(translations).forEach(eng => {
-          reply = reply.replace(new RegExp(eng, 'gi'), translations[eng]);
-        });
-      }
+      reply = applyLanguageTranslation(reply);
       
       setAutoReply(reply);
       return reply;
       
     } catch (error) {
       console.error('Error generating reply:', error);
-      setAutoReply('Failed to generate reply. Please try again.');
+      const fallbackReply = generateRuleBasedReply(`${email.subject || ''} ${email.snippet || ''}`);
+      setAutoReply(fallbackReply);
+      return fallbackReply;
     } finally {
       setIsAiLoading(false);
     }
   };
 
+  // Rule-based reply fallback
+  const generateRuleBasedReply = (fullText) => {
+    const text = fullText.toLowerCase();
+    
+    if (text.includes('deadline') || text.includes('submit before')) {
+      const baseReply = replyTone === 'professional' 
+        ? 'Thank you for the reminder. I acknowledge the deadline and will ensure timely completion of the required tasks.'
+        : replyTone === 'friendly'
+        ? 'Thanks for letting me know about the deadline! I\'ll make sure to get it done on time.'
+        : 'Got it, will finish before the deadline.';
+      return baseReply;
+    }
+    
+    if (text.includes('assignment') || text.includes('homework')) {
+      const baseReply = replyTone === 'professional' 
+        ? 'Thank you for the assignment details. I have received the instructions and will begin working on it promptly.'
+        : replyTone === 'friendly'
+        ? 'Thanks for the assignment! I\'ll get started on it right away.'
+        : 'Assignment received, will start work.';
+      return baseReply;
+    }
+    
+    if (text.includes('meeting') || text.includes('schedule')) {
+      const baseReply = replyTone === 'professional' 
+        ? 'Thank you for the meeting invitation. I have noted the schedule and will attend as planned.'
+        : replyTone === 'friendly'
+        ? 'Thanks for the invite! Looking forward to the meeting.'
+        : 'Meeting noted, will attend.';
+      return baseReply;
+    }
+    
+    if (text.includes('test') || text.includes('exam')) {
+      const baseReply = replyTone === 'professional' 
+        ? 'Thank you for the test information. I have noted the details and will prepare accordingly.'
+        : replyTone === 'friendly'
+        ? 'Got it, thanks for the test info! I\'ll study and be ready.'
+        : 'Test details received, will prepare.';
+      return baseReply;
+    }
+    
+    // Default reply
+    const baseReply = replyTone === 'professional' 
+      ? 'Thank you for your email. I have received the information and will respond as needed.'
+      : replyTone === 'friendly'
+      ? 'Thanks for the message! I\'ll get back to you if needed.'
+      : 'Got it, thanks.';
+    return baseReply;
+  };
+
+  // Apply language translation
+  const applyLanguageTranslation = (reply) => {
+    if (replyLanguage === 'hindi') {
+      const translations = {
+        'Thank you': 'धन्यवाद',
+        'deadline': 'डेडलाइन',
+        'assignment': 'असाइनमेंट',
+        'meeting': 'मीटिंग',
+        'test': 'टेस्ट'
+      };
+      
+      Object.keys(translations).forEach(eng => {
+        reply = reply.replace(new RegExp(eng, 'gi'), translations[eng]);
+      });
+    } else if (replyLanguage === 'telugu') {
+      const translations = {
+        'Thank you': 'ధనన్యవాద',
+        'deadline': 'డెడ్‌లైన్',
+        'assignment': 'అస్సైన్‌మెంట్',
+        'meeting': 'సమీటింగ్',
+        'test': 'పరీక్ష'
+      };
+      
+      Object.keys(translations).forEach(eng => {
+        reply = reply.replace(new RegExp(eng, 'gi'), translations[eng]);
+      });
+    }
+    
+    return reply;
+  };
+
   // Handle email selection for summary and reply
   const handleEmailSelect = async (email) => {
-    setSelectedEmail(email);
-    const summary = await generateEmailSummary(email);
-    setEmailSummary(summary);
-    const reply = await generateAutoReply(email);
-    setAutoReply(reply);
-    setShowReplyModal(true);
+    if (!email) {
+      console.error('No email provided to handleEmailSelect');
+      return;
+    }
+    
+    try {
+      setSelectedEmail(email);
+      
+      // Generate summary and reply in parallel for better performance
+      const [summary, reply] = await Promise.all([
+        generateEmailSummary(email),
+        generateAutoReply(email)
+      ]);
+      
+      setEmailSummary(summary);
+      setAutoReply(reply);
+      setShowReplyModal(true);
+    } catch (error) {
+      console.error('Error in handleEmailSelect:', error);
+      // Set fallback values
+      setEmailSummary('Unable to generate summary. Please try again.');
+      setAutoReply('Unable to generate reply. Please try again.');
+      setShowReplyModal(true);
+    }
   };
 
   // Send reply via Gmail API
@@ -588,8 +716,21 @@ function App() {
       return;
     }
     
+    if (!userEmail) {
+      alert('Please connect your Gmail account first.');
+      return;
+    }
+    
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      
+      // Show loading state
+      const sendButton = document.querySelector('button[onClick*="sendReply"]');
+      if (sendButton) {
+        sendButton.textContent = '📤 Sending...';
+        sendButton.disabled = true;
+      }
+      
       const response = await fetch(`${apiUrl}/api/emails/send-reply`, {
         method: 'POST',
         headers: {
@@ -599,22 +740,32 @@ function App() {
           to: selectedEmail.from,
           subject: `Re: ${selectedEmail.subject}`,
           message: autoReply,
-          userEmail: userEmail
+          userEmail: userEmail,
+          aiService: aiService,
+          apiKey: apiKey
         })
       });
       
       if (response.ok) {
-        alert('Reply sent successfully!');
+        alert('✅ Reply sent successfully!');
         setShowReplyModal(false);
         setSelectedEmail(null);
         setAutoReply('');
+        setEmailSummary('');
       } else {
         const data = await response.json();
-        alert(`Failed to send reply: ${data.error || 'Unknown error'}`);
+        alert(`❌ Failed to send reply: ${data.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error sending reply:', error);
-      alert('Failed to send reply. Please try again.');
+      alert('❌ Failed to send reply. Please check your internet connection and try again.');
+    } finally {
+      // Reset button state
+      const sendButton = document.querySelector('button[onClick*="sendReply"]');
+      if (sendButton) {
+        sendButton.textContent = '📤 Send Reply';
+        sendButton.disabled = false;
+      }
     }
   };
 
@@ -1144,55 +1295,78 @@ function App() {
                 {apiKey && (
                   <button
                     onClick={async () => {
+                      if (!autoReply.trim()) {
+                        alert('Please generate a reply first before enhancing it.');
+                        return;
+                      }
+                      
                       setIsAiLoading(true);
                       try {
                         let enhancedReply = '';
                         
                         if (aiService === 'gemini') {
-                          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
-                            method: 'POST',
-                            headers: {
-                              'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({
-                              contents: [{
-                                parts: [{
-                                  text: `Enhance this reply to be more professional and comprehensive. Original reply: "${autoReply}". Add more details, improve formatting, and make it more impressive.`
+                          try {
+                            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
+                              method: 'POST',
+                              headers: {
+                                'Content-Type': 'application/json',
+                              },
+                              body: JSON.stringify({
+                                contents: [{
+                                  parts: [{
+                                    text: `Enhance this reply to be more professional and comprehensive. Original reply: "${autoReply}". Add more details, improve formatting, and make it more impressive.`
+                                  }]
                                 }]
-                              }]
-                            })
-                          });
-                          
-                          const data = await response.json();
-                          if (data.candidates && data.candidates[0]) {
-                            enhancedReply = data.candidates[0].content.parts[0].text;
+                              })
+                            });
+                            
+                            if (!response.ok) {
+                              throw new Error(`Gemini API error: ${response.status}`);
+                            }
+                            
+                            const data = await response.json();
+                            if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0]) {
+                              enhancedReply = data.candidates[0].content.parts[0].text;
+                            }
+                          } catch (geminiError) {
+                            console.error('Gemini enhancement error:', geminiError);
+                            enhancedReply = autoReply; // Fallback to original reply
                           }
                         } else if (aiService === 'chatgpt') {
-                          const response = await fetch('https://api.openai.com/v1/chat/completions', {
-                            method: 'POST',
-                            headers: {
-                              'Authorization': `Bearer ${apiKey}`,
-                              'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({
-                              model: 'gpt-3.5-turbo',
-                              messages: [
-                                {
-                                  role: 'system',
-                                  content: 'You are an expert email assistant. Enhance the given reply to be more professional, comprehensive, and impressive.'
-                                },
-                                {
-                                  role: 'user',
-                                  content: `Enhance this reply to be more professional and comprehensive. Original reply: "${autoReply}". Add more details, improve formatting, and make it more impressive.`
-                                }
-                              ],
-                              max_tokens: 300
-                            })
-                          });
-                          
-                          const data = await response.json();
-                          if (data.choices && data.choices[0]) {
-                            enhancedReply = data.choices[0].message.content;
+                          try {
+                            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                              method: 'POST',
+                              headers: {
+                                'Authorization': `Bearer ${apiKey}`,
+                                'Content-Type': 'application/json',
+                              },
+                              body: JSON.stringify({
+                                model: 'gpt-3.5-turbo',
+                                messages: [
+                                  {
+                                    role: 'system',
+                                    content: 'You are an expert email assistant. Enhance the given reply to be more professional, comprehensive, and impressive.'
+                                  },
+                                  {
+                                    role: 'user',
+                                    content: `Enhance this reply to be more professional and comprehensive. Original reply: "${autoReply}". Add more details, improve formatting, and make it more impressive.`
+                                  }
+                                ],
+                                max_tokens: 300
+                              })
+                            });
+                            
+                            if (!response.ok) {
+                              throw new Error(`ChatGPT API error: ${response.status}`);
+                            }
+                            
+                            const data = await response.json();
+                            if (data.choices && data.choices[0] && data.choices[0].message) {
+                              enhancedReply = data.choices[0].message.content;
+                            }
+                          } catch (chatgptError) {
+                            console.error('ChatGPT enhancement error:', chatgptError);
+                            enhancedReply = autoReply; // Fallback to original reply
                           }
                         }
                         
@@ -1201,12 +1375,13 @@ function App() {
                         }
                       } catch (error) {
                         console.error('Error enhancing reply:', error);
+                        // Keep original reply on error
                       } finally {
                         setIsAiLoading(false);
                       }
                     }}
                     disabled={isAiLoading}
-                    className="mt-2 px-3 py-1 text-xs font-medium rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 transition-all"
+                    className="mt-2 px-3 py-1 text-xs font-medium rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isAiLoading ? '🤖 Enhancing...' : '✨ Generate AI Reply'}
                   </button>
