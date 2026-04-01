@@ -19,10 +19,11 @@ mongoose.connect(MONGO_URI)
   .catch((error) => console.error('Error connecting to MongoDB:', error.message));
 
 
+const backendUrl = (process.env.BACKEND_URL || 'http://localhost:5000').replace(/\/$/, '');
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
-  `${process.env.BACKEND_URL || 'http://localhost:5000'}/auth/callback`
+  `${backendUrl}/auth/callback`
 );
 
 
@@ -73,7 +74,7 @@ app.get('/auth/callback', async (req, res) => {
       console.log("Tokens securely saved to MongoDB!");
     }
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
     res.redirect(`${frontendUrl}/?email=${encodeURIComponent(userEmail)}`); 
     
   } catch (error) {
