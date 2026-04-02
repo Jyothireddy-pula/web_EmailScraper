@@ -25,22 +25,53 @@
 ## 🌐 Live Demo
 Coming soon! Deploy your own instance using the instructions below.
 
-## 📦 Installation
+## � Quick Setup (100% Working)
+
+### 1. Clone & Install
 ```bash
-# Clone the repository
 git clone https://github.com/Jyothireddy-pula/web_EmailScraper.git
 cd web_EmailScraper
 
-# Install dependencies
+# Frontend
 cd frontend && npm install
+
+# Backend  
 cd ../backend && npm install
-
-# Set up environment variables
-# Create .env file in backend with your credentials
-
-# Start the application
-npm run dev
 ```
+
+### 2. Environment Setup
+```bash
+# Copy environment template
+cp ../env.example .env
+
+# Edit .env with your credentials:
+# - MONGO_URI: MongoDB connection string
+# - GOOGLE_CLIENT_ID: From Google Cloud Console
+# - GOOGLE_CLIENT_SECRET: From Google Cloud Console
+```
+
+### 3. Google OAuth Setup
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create new project or select existing
+3. Enable Gmail API
+4. Create OAuth 2.0 credentials
+5. Add redirect URIs:
+   - `http://localhost:5000/auth/callback` (development)
+   - `https://email-scraper-backend-pht5.onrender.com/auth/callback` (production)
+
+### 4. Start Application
+```bash
+# Terminal 1: Start Backend
+cd backend && npm start
+
+# Terminal 2: Start Frontend  
+cd frontend && npm run dev
+```
+
+### 5. Access & Use
+- Frontend: http://localhost:5173
+- Backend: http://localhost:5000
+- Click "Connect your Gmail" → Authenticate → Start using!
 
 ## 🔐 Privacy & Security
 - **No Email Storage**: Emails are not stored on our servers
